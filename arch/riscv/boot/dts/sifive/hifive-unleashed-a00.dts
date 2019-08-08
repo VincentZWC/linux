@@ -13,6 +13,7 @@
 	compatible = "sifive,hifive-unleashed-a00", "sifive,fu540-c000";
 
 	chosen {
+		bootargs = "earlycon=sifive,0x10010000 console=ttySIF0,115200";
 	};
 
 	cpus {
