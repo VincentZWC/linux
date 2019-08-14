@@ -191,6 +191,13 @@ static inline void debug_write_lock_after(rwlock_t *lock)
 	lock->owner = current;
 }
 
+unsigned long LALA_s1[5];
+unsigned long LALA_s2[5];
+unsigned long LALA_s4[5];
+unsigned long LALA_sp[5];
+unsigned long LALA_sstatus[5];
+unsigned long LALA_sepc[5];
+
 static inline void debug_write_unlock(rwlock_t *lock)
 {
 	RWLOCK_BUG_ON(lock->magic != RWLOCK_MAGIC, lock, "bad magic");

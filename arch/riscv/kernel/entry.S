@@ -79,9 +79,12 @@ _save_context:
 	li t0, SR_SUM | SR_FS
 
 	REG_L s0, TASK_TI_USER_SP(tp)
+	addi t1, s1, 0
 	csrrc s1, CSR_SSTATUS, t0
+	addi s7, s2, 0
 	csrr s2, CSR_SEPC
 	csrr s3, CSR_STVAL
+	addi t2, s4, 0	
 	csrr s4, CSR_SCAUSE
 	csrr s5, CSR_SSCRATCH
 	REG_S s0, PT_SP(sp)
@@ -142,7 +145,6 @@ _save_context:
 
 ENTRY(handle_exception)
 	SAVE_ALL
-
 	/*
 	 * Set sscratch register to 0, so that if a recursive exception
 	 * occurs, the exception vector knows it came from the kernel
@@ -154,7 +156,27 @@ ENTRY(handle_exception)
 .option norelax
 	la gp, __global_pointer$
 .option pop
-
+	lw s6, 40(tp)
+	la t0, LALA_sp
+	slli s6, s6, 3
+	add t0, t0, s6
+	sd sp, (t0)
+	la t0, LALA_s2
+	add t0, t0, s6
+	sd s7, (t0)
+	la t0, LALA_s4
+	add t0, t0, s6
+	sd t2, (t0)
+	la t0, LALA_s1
+	add t0, t0, s6
+	sd t1, (t0)
+	la t0, LALA_sstatus
+	add t0, t0, s6
+	sd s1, (t0)
+	la t0, LALA_sepc
+	add t0, t0, s6
+	csrr t1, sepc
+	sd t1, (t0)
 	la ra, ret_from_exception
 	/*
 	 * MSB of cause differentiates between
@@ -167,8 +189,11 @@ ENTRY(handle_exception)
 	tail do_IRQ
 1:
 	/* Exceptions run with interrupts enabled */
+	csrr t1, sstatus
+	andi t0, t1, 0x20
+	beqz t0, 2f
 	csrs sstatus, SR_SIE
-
+2:
 	/* Handle syscalls */
 	li t0, EXC_SYSCALL
 	beq s4, t0, handle_syscall

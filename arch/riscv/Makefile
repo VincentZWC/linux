@@ -21,7 +21,7 @@ ifeq ($(CONFIG_ARCH_RV64I),y)
 	BITS := 64
 	UTS_MACHINE := riscv64
 
-	KBUILD_CFLAGS += -mabi=lp64
+	KBUILD_CFLAGS += -mabi=lp64 -g3
 	KBUILD_AFLAGS += -mabi=lp64
 
 	KBUILD_LDFLAGS += -melf64lriscv
