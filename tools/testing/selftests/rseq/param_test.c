@@ -15,6 +15,9 @@
 #include <errno.h>
 #include <stddef.h>
 
+__thread long cpu_cnt_i[4] ={0};
+__thread long cpu_cnt_d[4] ={0};
+
 inline pid_t gettid(void)
 {
 	return syscall(__NR_gettid);
@@ -452,7 +455,6 @@ void test_percpu_spinlock(void)
 	sum = 0;
 	for (i = 0; i < CPU_SETSIZE; i++)
 		sum += data.c[i].count;
-
 	assert(sum == (uint64_t)opt_reps * num_threads);
 }
 
@@ -915,7 +917,6 @@ bool this_cpu_memcpy_buffer_push(struct percpu_memcpy_buffer *buffer,
 {
 	bool result = false;
 	int cpu;
-
 	for (;;) {
 		intptr_t *targetptr_final, newval_final, offset;
 		char *destptr, *srcptr;
@@ -943,6 +944,7 @@ bool this_cpu_memcpy_buffer_push(struct percpu_memcpy_buffer *buffer,
 				offset, destptr, srcptr, copylen,
 				newval_final, cpu);
 		if (rseq_likely(!ret)) {
+			cpu_cnt_i[cpu] ++;
 			result = true;
 			break;
 		}
@@ -950,6 +952,7 @@ bool this_cpu_memcpy_buffer_push(struct percpu_memcpy_buffer *buffer,
 	}
 	if (_cpu)
 		*_cpu = cpu;
+
 	return result;
 }
 
@@ -981,6 +984,7 @@ bool this_cpu_memcpy_buffer_pop(struct percpu_memcpy_buffer *buffer,
 			offset, destptr, srcptr, copylen,
 			newval_final, cpu);
 		if (rseq_likely(!ret)) {
+			cpu_cnt_d[cpu] ++;
 			result = true;
 			break;
 		}
@@ -1017,11 +1021,18 @@ void *test_percpu_memcpy_buffer_thread(void *arg)
 	if (!opt_disable_rseq && rseq_register_current_thread())
 		abort();
 
+	cpu_cnt_d[0] = 0;
+	cpu_cnt_d[1] = 0;
+	cpu_cnt_d[2] = 0;
+	cpu_cnt_d[3] = 0;
+	cpu_cnt_i[0] = 0;
+	cpu_cnt_i[1] = 0;
+	cpu_cnt_i[2] = 0;
+	cpu_cnt_i[3] = 0;
 	reps = opt_reps;
 	for (i = 0; i < reps; i++) {
 		struct percpu_memcpy_buffer_node item;
 		bool result;
-
 		result = this_cpu_memcpy_buffer_pop(buffer, &item, NULL);
 		if (opt_yield)
 			sched_yield();  /* encourage shuffling */
@@ -1038,6 +1049,8 @@ void *test_percpu_memcpy_buffer_thread(void *arg)
 	if (!opt_disable_rseq && rseq_unregister_current_thread())
 		abort();
 
+	printf("cpu_cnt_i[0]:%lx cpu_cnt_i[1]:%lx cpu_cnt_i[2]:%lx cpu_cnt_i[3]:%lx\n",cpu_cnt_i[0], cpu_cnt_i[1], cpu_cnt_i[2], cpu_cnt_i[3]);
+	printf("cpu_cnt_d[0]:%lx cpu_cnt_d[1]:%lx cpu_cnt_d[2]:%lx cpu_cnt_d[3]:%lx\n\n",cpu_cnt_d[0], cpu_cnt_d[1], cpu_cnt_d[2], cpu_cnt_d[3]);
 	return NULL;
 }
 
@@ -1102,7 +1115,6 @@ void test_percpu_memcpy_buffer(void)
 
 	for (i = 0; i < CPU_SETSIZE; i++) {
 		struct percpu_memcpy_buffer_node item;
-
 		if (!CPU_ISSET(i, &allowed_cpus))
 			continue;
 
