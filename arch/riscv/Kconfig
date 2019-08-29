@@ -134,6 +134,7 @@ config ARCH_RV64I
 	select HAVE_DYNAMIC_FTRACE
 	select HAVE_DYNAMIC_FTRACE_WITH_REGS
 	select SWIOTLB
+	select HAVE_RSEQ
 
 endchoice
 
