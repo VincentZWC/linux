@@ -818,6 +818,46 @@ static int __init sifive_serial_console_setup(struct console *co, char *options)
 	return uart_set_options(&ssp->port, co, baud, parity, bits, flow);
 }
 
+#ifdef CONFIG_CONSOLE_POLL
+/*
+ * Console polling routines for writing and reading from the uart while
+ * in an interrupt or debug context.
+ */
+
+static int sifive_serial_get_poll_char(struct uart_port *port)
+{
+	struct sifive_serial_port *ssp = port_to_sifive_serial_port(port);
+	char is_empty, ch;
+
+	ch = __ssp_receive_char(ssp, &is_empty);
+	if (is_empty)
+		return NO_POLL_CHAR;
+
+	return ch;
+}
+
+static void sifive_serial_put_poll_char(struct uart_port *port,
+			 unsigned char c)
+{
+	struct sifive_serial_port *ssp = port_to_sifive_serial_port(port);
+	unsigned char ier = ssp->ier;
+
+	/* Save the IER then disable the interrupts. */
+	__ssp_disable_txwm(ssp);
+
+	/* Send the character out. */
+	sifive_serial_console_putchar(port, c);
+
+	/* Wait for transmitter to become empty */
+	__ssp_wait_for_xmitr(ssp);
+
+	/* Recover the interrupt state */
+	if(ier & SIFIVE_SERIAL_IE_TXWM_MASK)
+		__ssp_enable_txwm(ssp);
+}
+
+#endif /* CONFIG_CONSOLE_POLL */
+
 static struct uart_driver sifive_serial_uart_driver;
 
 static struct console sifive_serial_console = {
@@ -877,6 +917,10 @@ static const struct uart_ops sifive_serial_uops = {
 	.request_port	= sifive_serial_request_port,
 	.config_port	= sifive_serial_config_port,
 	.verify_port	= sifive_serial_verify_port,
+#ifdef CONFIG_CONSOLE_POLL
+	.poll_get_char	= sifive_serial_get_poll_char,
+	.poll_put_char	= sifive_serial_put_poll_char,
+#endif
 };
 
 static struct uart_driver sifive_serial_uart_driver = {

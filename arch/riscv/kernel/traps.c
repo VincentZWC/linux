@@ -129,6 +129,11 @@ asmlinkage void do_trap_break(struct pt_regs *regs)
 				(void __user *)(regs->sepc));
 		return;
 	}
+#ifdef CONFIG_KGDB
+	if (notify_die(DIE_TRAP, "EBREAK", regs, 0, regs->scause, SIGTRAP)
+							== NOTIFY_STOP)
+               return;
+#endif
 #ifdef CONFIG_GENERIC_BUG
 	{
 		enum bug_trap_type type;
