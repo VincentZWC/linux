@@ -15,6 +15,7 @@
 
 	chosen {
 		stdout-path = "serial0";
+		bootargs = "earlycon=sifive,0x10010000 console=ttySIF0,115200 kgdboc=ttySIF0,115200";
 	};
 
 	cpus {
