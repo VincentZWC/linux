@@ -28,6 +28,7 @@ enum fixed_addresses {
 	FIX_PTE,
 	FIX_PMD,
 	FIX_EARLYCON_MEM_BASE,
+	FIX_MTIME_MMIO_BASE,
 	__end_of_fixed_addresses
 };
 

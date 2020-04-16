@@ -13,6 +13,7 @@ typedef unsigned long cycles_t;
 
 extern u64 __iomem *riscv_time_val;
 extern u64 __iomem *riscv_time_cmp;
+extern phys_addr_t riscv_time_mmio_pa;
 
 #ifdef CONFIG_64BIT
 #define mmio_get_cycles()	readq_relaxed(riscv_time_val)
@@ -23,7 +24,7 @@ extern u64 __iomem *riscv_time_cmp;
 
 static inline cycles_t get_cycles(void)
 {
-	if (IS_ENABLED(CONFIG_RISCV_SBI))
+	if (riscv_time_val == NULL)
 		return csr_read(CSR_TIME);
 	return mmio_get_cycles();
 }

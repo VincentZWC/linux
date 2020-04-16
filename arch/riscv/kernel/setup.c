@@ -26,7 +26,9 @@
 #include <asm/sbi.h>
 #include <asm/tlbflush.h>
 #include <asm/thread_info.h>
+#include <asm/timex.h>
 #include <asm/kasan.h>
+#include <asm/fixmap.h>
 
 #include "head.h"
 
@@ -58,6 +60,23 @@ void __init parse_dtb(void)
 #endif
 }
 
+void __init probe_mmio_mtime(void)
+{
+	if (IS_ENABLED(CONFIG_RISCV_SBI)) {
+		u64 base;
+		riscv_time_mmio_pa = sbi_probe_mmio_mtime();
+		if (!riscv_time_mmio_pa)
+			return;
+		set_fixmap_io(FIX_MTIME_MMIO_BASE,
+			      riscv_time_mmio_pa & PAGE_MASK);
+		base = __fix_to_virt(FIX_MTIME_MMIO_BASE);
+		riscv_time_val =
+			(u64 *)(base + (riscv_time_mmio_pa & ~PAGE_MASK));
+	} else {
+		riscv_time_mmio_pa = (phys_addr_t)riscv_time_val;
+	}
+}
+
 void __init setup_arch(char **cmdline_p)
 {
 	init_mm.start_code = (unsigned long) _stext;
@@ -74,6 +93,11 @@ void __init setup_arch(char **cmdline_p)
 	unflatten_device_tree();
 	clint_init_boot_cpu();
 
+#if IS_ENABLED(CONFIG_RISCV_SBI)
+	sbi_init();
+#endif
+	probe_mmio_mtime();
+
 #ifdef CONFIG_SWIOTLB
 	swiotlb_init(1);
 #endif
@@ -82,14 +106,9 @@ void __init setup_arch(char **cmdline_p)
 	kasan_init();
 #endif
 
-#if IS_ENABLED(CONFIG_RISCV_SBI)
-	sbi_init();
-#endif
-
 #ifdef CONFIG_SMP
 	setup_smp();
 #endif
-
 	riscv_fill_hwcap();
 }
 

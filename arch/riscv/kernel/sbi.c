@@ -340,6 +340,18 @@ static int __sbi_rfence_v02(int fid, const unsigned long *hart_mask,
 	return 0;
 }
 
+unsigned long sbi_probe_mmio_mtime(void)
+{
+	struct sbiret ret = {0};
+
+	ret = sbi_ecall(SBI_EXT_TIME, SBI_EXT_TIME_MMAP_ACCESS,
+			0, 0, 0, 0, 0, 0);
+	if(ret.error)
+	        ret.value = 0;
+	return (unsigned long) ret.value;
+}
+
+
 /**
  * sbi_set_timer() - Program the timer for next timer event.
  * @stime_value: The value after which next timer event should fire.
