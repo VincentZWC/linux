@@ -12,6 +12,7 @@
 #include <linux/binfmts.h>
 #include <linux/err.h>
 #include <asm/page.h>
+#include <asm/timex.h>
 #ifdef GENERIC_TIME_VSYSCALL
 #include <vdso/datapage.h>
 #else
@@ -21,24 +22,35 @@
 extern char vdso_start[], vdso_end[];
 
 static unsigned int vdso_pages;
+static unsigned int vdso_data_pages;
 static struct page **vdso_pagelist;
 
 /*
  * The vDSO data page.
  */
 static union {
-	struct vdso_data	data;
-	u8			page[PAGE_SIZE];
+	struct vdso_data data;
+	u8 page[PAGE_SIZE];
 } vdso_data_store __page_aligned_data;
 struct vdso_data *vdso_data = &vdso_data_store.data;
 
 static int __init vdso_init(void)
 {
 	unsigned int i;
+	unsigned long *vdso_mtime_offset;
 
+	if (riscv_time_mmio_pa) {
+		vdso_mtime_offset =
+			(unsigned long *)((unsigned long)vdso_data +
+					 PAGE_SIZE -
+					 sizeof(unsigned long));
+		*vdso_mtime_offset = (riscv_time_mmio_pa & (PAGE_SIZE - 1));
+	}
 	vdso_pages = (vdso_end - vdso_start) >> PAGE_SHIFT;
+	vdso_data_pages = (riscv_time_mmio_pa) ? 2 : 1;
 	vdso_pagelist =
-		kcalloc(vdso_pages + 1, sizeof(struct page *), GFP_KERNEL);
+	    kcalloc(vdso_pages + vdso_data_pages, sizeof(struct page *),
+		    GFP_KERNEL);
 	if (unlikely(vdso_pagelist == NULL)) {
 		pr_err("vdso: pagelist allocation failed\n");
 		return -ENOMEM;
@@ -51,19 +63,21 @@ static int __init vdso_init(void)
 		vdso_pagelist[i] = pg;
 	}
 	vdso_pagelist[i] = virt_to_page(vdso_data);
+	vdso_pagelist[i + 1] = NULL;
 
 	return 0;
 }
+
 arch_initcall(vdso_init);
 
-int arch_setup_additional_pages(struct linux_binprm *bprm,
-	int uses_interp)
+int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 {
 	struct mm_struct *mm = current->mm;
 	unsigned long vdso_base, vdso_len;
+	struct vm_area_struct *vma;
 	int ret;
 
-	vdso_len = (vdso_pages + 1) << PAGE_SHIFT;
+	vdso_len = (vdso_pages + vdso_data_pages) << PAGE_SHIFT;
 
 	down_write(&mm->mmap_sem);
 	vdso_base = get_unmapped_area(NULL, 0, vdso_len, 0, 0);
@@ -90,8 +104,19 @@ int arch_setup_additional_pages(struct linux_binprm *bprm,
 	}
 
 	vdso_base += (vdso_pages << PAGE_SHIFT);
-	ret = install_special_mapping(mm, vdso_base, PAGE_SIZE,
-		(VM_READ | VM_MAYREAD), &vdso_pagelist[vdso_pages]);
+	ret = install_special_mapping(mm, vdso_base,
+		vdso_data_pages * PAGE_SIZE, (VM_READ | VM_MAYREAD),
+		&vdso_pagelist[vdso_pages]);
+
+	if (riscv_time_mmio_pa) {
+		vma = find_vma(mm, vdso_base + PAGE_SIZE);
+		/*Map timer to user space */
+		ret = io_remap_pfn_range(vma, vdso_base + PAGE_SIZE,
+					 riscv_time_mmio_pa >> PAGE_SHIFT,
+					 PAGE_SIZE, vma->vm_page_prot);
+		if (unlikely(ret))
+			mm->context.vdso = NULL;
+	}
 
 	if (unlikely(ret))
 		mm->context.vdso = NULL;

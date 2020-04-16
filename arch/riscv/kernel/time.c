@@ -30,7 +30,10 @@ void __init time_init(void)
 void clocksource_arch_init(struct clocksource *cs)
 {
 #ifdef CONFIG_GENERIC_GETTIMEOFDAY
-	cs->vdso_clock_mode = VDSO_CLOCKMODE_ARCHTIMER;
+	if (riscv_time_mmio_pa)
+		cs->vdso_clock_mode = VDSO_CLOCKMODE_MMIOTIMER;
+	else
+		cs->vdso_clock_mode = VDSO_CLOCKMODE_ARCHTIMER;
 #else
 	cs->vdso_clock_mode = VDSO_CLOCKMODE_NONE;
 #endif
