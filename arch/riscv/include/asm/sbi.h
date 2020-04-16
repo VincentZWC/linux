@@ -41,6 +41,7 @@ enum sbi_ext_base_fid {
 
 enum sbi_ext_time_fid {
 	SBI_EXT_TIME_SET_TIMER = 0,
+	SBI_EXT_TIME_MMIO_ACCESS = 1,
 };
 
 enum sbi_ext_ipi_fid {
@@ -125,6 +126,7 @@ int sbi_remote_hfence_vvma_asid(const unsigned long *hart_mask,
 				unsigned long size,
 				unsigned long asid);
 int sbi_probe_extension(int ext);
+unsigned long sbi_probe_mmio_mtime(void);
 
 /* Check if current SBI specification version is 0.1 or not */
 static inline int sbi_spec_is_0_1(void)

@@ -341,6 +341,26 @@ static int __sbi_rfence_v02(int fid, const unsigned long *hart_mask,
 }
 
 /**
+ * sbi_set_timer() - Require the permission for reading $mtime via MMIO.
+ * Return: The physical address of $mtime
+ */
+unsigned long sbi_probe_mmio_mtime(void)
+{
+	struct sbiret ret = {0};
+
+	ret = sbi_ecall(SBI_EXT_TIME, SBI_EXT_TIME_MMIO_ACCESS,
+			0, 0, 0, 0, 0, 0);
+	if (ret.error) {
+		/*
+		 * M-mode does not allow S-mode/U-mode to read $mtime
+		 * via MMIO. Set the physical address of $mtime as zero
+		 */
+		ret.value = 0;
+	}
+	return (unsigned long)ret.value;
+}
+
+/**
  * sbi_set_timer() - Program the timer for next timer event.
  * @stime_value: The value after which next timer event should fire.
  *

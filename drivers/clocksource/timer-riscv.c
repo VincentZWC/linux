@@ -19,6 +19,7 @@
 
 u64 __iomem *riscv_time_cmp;
 u64 __iomem *riscv_time_val;
+phys_addr_t riscv_time_mmio_pa;
 
 static inline void mmio_set_timer(u64 val)
 {

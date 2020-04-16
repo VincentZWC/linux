@@ -26,7 +26,9 @@
 #include <asm/sbi.h>
 #include <asm/tlbflush.h>
 #include <asm/thread_info.h>
+#include <asm/timex.h>
 #include <asm/kasan.h>
+#include <asm/fixmap.h>
 
 #include "head.h"
 
@@ -58,6 +60,49 @@ void __init parse_dtb(void)
 #endif
 }
 
+static int mmio_mtime_sanity_check(void)
+{
+	int err = 0;
+	u64 time0, time1, time2;
+
+	time0 = get_cycles64();
+	time1 = get_cycles64();
+	time2 = get_cycles64();
+	if (time2 < time1 || time1 < time0)
+		err = 1;
+	return err;
+}
+
+/**
+ * void __init probe_mmio_mtime(void)
+ * This function obtains the physical address of $mtime via
+ * sbi_probe_mmio_mtime(), and then it will create the address
+ * mapping for the $mtime if M-mode grant S-mode and U-mode
+ * permission to read $mtime by MMIO.
+ */
+void __init probe_mmio_mtime(void)
+{
+	if (IS_ENABLED(CONFIG_RISCV_SBI)) {
+		u64 base;
+
+		riscv_time_mmio_pa = sbi_probe_mmio_mtime();
+		if (!riscv_time_mmio_pa)
+			return;
+		set_fixmap_io(FIX_MTIME_MMIO_BASE,
+			      riscv_time_mmio_pa & PAGE_MASK);
+		base = __fix_to_virt(FIX_MTIME_MMIO_BASE);
+		riscv_time_val =
+			(u64 *)(base + (riscv_time_mmio_pa & ~PAGE_MASK));
+		if (mmio_mtime_sanity_check()) {
+			/* Fall back to CSR_read(MTIME) */
+			riscv_time_val = NULL;
+			riscv_time_mmio_pa = 0;
+		}
+	} else {
+		riscv_time_mmio_pa = (phys_addr_t)riscv_time_val;
+	}
+}
+
 void __init setup_arch(char **cmdline_p)
 {
 	init_mm.start_code = (unsigned long) _stext;
@@ -74,6 +119,11 @@ void __init setup_arch(char **cmdline_p)
 	unflatten_device_tree();
 	clint_init_boot_cpu();
 
+#if IS_ENABLED(CONFIG_RISCV_SBI)
+	sbi_init();
+#endif
+	probe_mmio_mtime();
+
 #ifdef CONFIG_SWIOTLB
 	swiotlb_init(1);
 #endif
@@ -82,14 +132,9 @@ void __init setup_arch(char **cmdline_p)
 	kasan_init();
 #endif
 
-#if IS_ENABLED(CONFIG_RISCV_SBI)
-	sbi_init();
-#endif
-
 #ifdef CONFIG_SMP
 	setup_smp();
 #endif
-
 	riscv_fill_hwcap();
 }
 
