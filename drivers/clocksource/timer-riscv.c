@@ -20,6 +20,8 @@
 u64 __iomem *riscv_time_cmp;
 u64 __iomem *riscv_time_val;
 
+phys_addr_t riscv_time_mmio_pa;
+
 static inline void mmio_set_timer(u64 val)
 {
 	void __iomem *r;
@@ -130,6 +132,10 @@ static int __init riscv_timer_init_dt(struct device_node *n)
 	error = cpuhp_setup_state(CPUHP_AP_RISCV_TIMER_STARTING,
 			 "clockevents/riscv/timer:starting",
 			 riscv_timer_starting_cpu, riscv_timer_dying_cpu);
+
+	if (riscv_time_mmio_pa)
+		riscv_clocksource.vdso_clock_mode = VDSO_CLOCKMODE_MMIOTIMER;
+
 	if (error)
 		pr_err("cpu hp setup state failed for RISCV timer [%d]\n",
 		       error);

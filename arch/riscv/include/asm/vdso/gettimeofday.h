@@ -7,6 +7,7 @@
 #include <asm/unistd.h>
 #include <asm/csr.h>
 #include <asm/page.h>
+#include <asm/mmio.h>
 #include <uapi/linux/time.h>
 
 #define VDSO_HAS_CLOCK_GETRES	1
@@ -60,19 +61,26 @@ int clock_getres_fallback(clockid_t _clkid, struct __kernel_timespec *_ts)
 	return ret;
 }
 
-static __always_inline u64 __arch_get_hw_counter(s32 clock_mode)
-{
-	/*
-	 * The purpose of csr_read(CSR_TIME) is to trap the system into
-	 * M-mode to obtain the value of CSR_TIME. Hence, unlike other
-	 * architecture, no fence instructions surround the csr_read()
-	 */
-	return csr_read(CSR_TIME);
-}
-
 static __always_inline const struct vdso_data *__arch_get_vdso_data(void)
 {
 	return _vdso_data;
+}
+
+static __always_inline u64 __arch_get_hw_counter(s32 clock_mode)
+{
+	if (clock_mode == VDSO_CLOCKMODE_MMIOTIMER) {
+		u64* mmio_offset = (void *)__arch_get_vdso_data() +
+				   PAGE_SIZE - sizeof(unsigned long);
+		return readq_relaxed((void *)__arch_get_vdso_data() +
+				     PAGE_SIZE + *mmio_offset);
+	} else {
+		/*
+		 * The purpose of csr_read(CSR_TIME) is to trap the system into
+		 * M-mode to obtain the value of CSR_TIME. Hence, unlike other
+		 * architecture, no fence instructions surround the csr_read()
+		 */
+		return csr_read(CSR_TIME);
+	}
 }
 
 #endif /* !__ASSEMBLY__ */
